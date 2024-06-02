@@ -167,7 +167,7 @@ impl CommandLight {
 pub struct UnauthBridge {
     /// The IP-address of the bridge.
     pub ip: std::net::IpAddr,
-    pub(self) client: reqwest::blocking::Client,
+    pub(self) client: reqwest::Client,
 }
 
 impl UnauthBridge {
@@ -185,7 +185,7 @@ impl UnauthBridge {
         }
     }
 
-    /// This function registers a new user at the provided brige, using `devicetype` as an
+    /// This function registers a new user at the provided bridge, using `devicetype` as an
     /// identifier for that user. It returns an error if the button of the bridge was not pressed
     /// shortly before running this function.
     /// ### Example
@@ -194,7 +194,7 @@ impl UnauthBridge {
     /// let password = bridge.register_user("mylaptop").unwrap();
     /// // now this password can be stored and reused
     /// ```
-    pub fn register_user(self, devicetype: &str) -> crate::Result<Bridge> {
+    pub async fn register_user(self, devicetype: &str) -> crate::Result<Bridge> {
         #[derive(Serialize)]
         struct PostApi {
             devicetype: String,
@@ -208,7 +208,7 @@ impl UnauthBridge {
         };
         let url = format!("http://{}/api", self.ip);
         let resp: BridgeResponse<SuccessResponse<Username>> =
-            self.client.post(&url).json(&obtain).send()?.json()?;
+            self.client.post(&url).json(&obtain).send().await?.json().await?;
         let resp = resp.get()?;
 
         Ok(Bridge {
@@ -227,7 +227,7 @@ pub struct Bridge {
     pub ip: std::net::IpAddr,
     /// This is the username of the currently logged in user.
     pub username: String,
-    pub(self) client: reqwest::blocking::Client,
+    pub(self) client: reqwest::Client,
 }
 
 impl Bridge {
@@ -240,7 +240,7 @@ impl Bridge {
     pub fn for_ip(ip: impl Into<std::net::IpAddr>) -> UnauthBridge {
         UnauthBridge {
             ip: ip.into(),
-            client: reqwest::blocking::Client::new(),
+            client: reqwest::Client::new(),
         }
     }
 
@@ -250,24 +250,25 @@ impl Bridge {
     /// ```no_run
     /// let maybe_bridge = hueclient::Bridge::discover();
     /// ```
-    pub fn discover() -> Option<UnauthBridge> {
+    pub async fn discover() -> Option<UnauthBridge> {
         crate::disco::discover_hue_bridge()
+            .await
             .ok()
             .map(|ip| UnauthBridge {
                 ip,
-                client: reqwest::blocking::Client::new(),
+                client: reqwest::Client::new(),
             })
     }
 
-    /// A convience wrapper around `Bridge::disover`, but panics if there is no bridge present.
+    /// A convince wrapper around `Bridge::discover`, but panics if there is no bridge present.
     /// ### Example
     /// ```no_run
-    /// let brige = hueclient::Bridge::discover_required();
+    /// let bridge = hueclient::Bridge::discover_required();
     /// ```
     /// ### Panics
-    /// This function panics if there is no brige present.
-    pub fn discover_required() -> UnauthBridge {
-        Self::discover().expect("No bridge found!")
+    /// This function panics if there is no bridge present.
+    pub async fn discover_required() -> UnauthBridge {
+        Self::discover().await.expect("No bridge found!")
     }
 
     /// Consumes the bidge and return a new one with a configured username.
@@ -284,7 +285,7 @@ impl Bridge {
         }
     }
 
-    /// This function registers a new user at the provided brige, using `devicetype` as an
+    /// This function registers a new user at the provided bridge, using `devicetype` as an
     /// identifier for that user. It returns an error if the button of the bridge was not pressed
     /// shortly before running this function.
     /// ### Example
@@ -295,7 +296,7 @@ impl Bridge {
     /// // now this username d can be stored and reused
     /// println!("the password was {}", bridge.username);
     /// ```
-    pub fn register_user(self, devicetype: &str) -> crate::Result<Bridge> {
+    pub async fn register_user(self, devicetype: &str) -> crate::Result<Bridge> {
         #[derive(Serialize)]
         struct PostApi {
             devicetype: String,
@@ -308,8 +309,14 @@ impl Bridge {
             devicetype: devicetype.to_string(),
         };
         let url = format!("http://{}/api", self.ip);
-        let resp: BridgeResponse<SuccessResponse<Username>> =
-            self.client.post(&url).json(&obtain).send()?.json()?;
+        let resp: BridgeResponse<SuccessResponse<Username>> = self
+            .client
+            .post(&url)
+            .json(&obtain)
+            .send()
+            .await?
+            .json()
+            .await?;
         let resp = resp.get()?;
 
         Ok(Bridge {
@@ -329,10 +336,10 @@ impl Bridge {
     ///     println!("{:?}", light);
     /// }
     /// ```
-    pub fn get_all_lights(&self) -> crate::Result<Vec<IdentifiedLight>> {
+    pub async fn get_all_lights(&self) -> crate::Result<Vec<IdentifiedLight>> {
         let url = format!("http://{}/api/{}/lights", self.ip, self.username);
         type Resp = BridgeResponse<HashMap<String, Light>>;
-        let resp: Resp = self.client.get(&url).send()?.json()?;
+        let resp: Resp = self.client.get(&url).send().await?.json().await?;
         let mut lights = vec![];
         for (k, light) in resp.get()? {
             let id = usize::from_str(&k)
@@ -353,10 +360,10 @@ impl Bridge {
     ///     println!("{:?}", group);
     /// }
     /// ```
-    pub fn get_all_groups(&self) -> crate::Result<Vec<IdentifiedGroup>> {
+    pub async fn get_all_groups(&self) -> crate::Result<Vec<IdentifiedGroup>> {
         let url = format!("http://{}/api/{}/groups", self.ip, self.username);
         type Resp = BridgeResponse<HashMap<String, Group>>;
-        let resp: Resp = self.client.get(&url).send()?.json()?;
+        let resp: Resp = self.client.get(&url).send().await?.json().await?;
         let mut groups = vec![];
         for (k, group) in resp.get()? {
             let id = usize::from_str(&k)
@@ -377,43 +384,69 @@ impl Bridge {
     ///     println!("{:?}", scene);
     /// }
     /// ```
-    pub fn get_all_scenes(&self) -> crate::Result<Vec<IdentifiedScene>> {
+    pub async fn get_all_scenes(&self) -> crate::Result<Vec<IdentifiedScene>> {
         let url = format!("http://{}/api/{}/scenes", self.ip, self.username);
         type Resp = BridgeResponse<HashMap<String, Scene>>;
-        let resp: Resp = self.client.get(&url).send()?.json()?;
+        let resp: Resp = self.client.get(&url).send().await?.json().await?;
         let mut scenes = vec![];
         for (k, scene) in resp.get()? {
-            scenes.push(IdentifiedScene {
-                id: k,
-                scene: scene,
-            });
+            scenes.push(IdentifiedScene { id: k, scene });
         }
         scenes.sort_by(|a, b| a.id.cmp(&b.id));
         Ok(scenes)
     }
 
-    pub fn set_scene(&self, scene: String) -> crate::Result<Value> {
+    pub async fn set_scene(&self, scene: String) -> crate::Result<Value> {
         let url = format!("http://{}/api/{}/groups/0/action", self.ip, self.username);
         let command = CommandLight::default().scene(scene);
-        let resp: BridgeResponse<Value> = self.client.put(&url).json(&command).send()?.json()?;
+        let resp: BridgeResponse<Value> = self
+            .client
+            .put(&url)
+            .json(&command)
+            .send()
+            .await?
+            .json()
+            .await?;
         resp.get()
     }
 
-    pub fn set_group_state(&self, group: usize, command: &CommandLight) -> crate::Result<Value> {
+    pub async fn set_group_state(
+        &self,
+        group: usize,
+        command: &CommandLight,
+    ) -> crate::Result<Value> {
         let url = format!(
             "http://{}/api/{}/groups/{}/action",
             self.ip, self.username, group
         );
-        let resp: BridgeResponse<Value> = self.client.put(&url).json(command).send()?.json()?;
+        let resp: BridgeResponse<Value> = self
+            .client
+            .put(&url)
+            .json(command)
+            .send()
+            .await?
+            .json()
+            .await?;
         resp.get()
     }
 
-    pub fn set_light_state(&self, light: usize, command: &CommandLight) -> crate::Result<Value> {
+    pub async fn set_light_state(
+        &self,
+        light: usize,
+        command: &CommandLight,
+    ) -> crate::Result<Value> {
         let url = format!(
             "http://{}/api/{}/lights/{}/state",
             self.ip, self.username, light
         );
-        let resp: BridgeResponse<Value> = self.client.put(&url).json(command).send()?.json()?;
+        let resp: BridgeResponse<Value> = self
+            .client
+            .put(&url)
+            .json(command)
+            .send()
+            .await?
+            .json()
+            .await?;
         resp.get()
     }
 }
@@ -452,7 +485,6 @@ struct BridgeError {
 
 #[derive(Debug, serde::Deserialize)]
 struct BridgeErrorInner {
-    address: String,
     description: String,
     r#type: usize,
 }

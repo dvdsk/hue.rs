@@ -2,14 +2,17 @@ extern crate hueclient;
 use std::env;
 
 #[allow(dead_code)]
-fn main() {
+#[tokio::main]
+async fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         println!("usage : {:?} <username>", args[0]);
         return;
     }
-    let bridge = hueclient::Bridge::discover_required().with_user(args[1].to_string());
-    match bridge.get_all_groups() {
+    let bridge = hueclient::Bridge::discover_required()
+        .await
+        .with_user(args[1].to_string());
+    match bridge.get_all_groups().await {
         Ok(groups) => {
             println!("id name                 on    bri   hue sat temp  x      y");
             for ref l in groups.iter() {
