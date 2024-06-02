@@ -17,8 +17,8 @@ async fn main() {
     let bridge = hueclient::Bridge::discover_required()
         .await
         .with_user(args[1].to_string());
-    let ref groups: Vec<usize> = args[2]
-        .split(",")
+    let groups: &Vec<usize> = &args[2]
+        .split(',')
         .map(|s| s.parse::<usize>().unwrap())
         .collect();
     let parsed = hueclient::parse_command(args);

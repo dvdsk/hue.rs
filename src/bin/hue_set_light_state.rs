@@ -15,8 +15,8 @@ async fn main() {
         return;
     }
     let bridge = hueclient::Bridge::discover_required().await.with_user(args[1].to_string());
-    let ref lights: Vec<usize> = args[2]
-        .split(",")
+    let lights: &Vec<usize> = &args[2]
+        .split(',')
         .map(|s| s.parse::<usize>().unwrap())
         .collect();
     let parsed = hueclient::parse_command(args);

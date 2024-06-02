@@ -68,6 +68,7 @@ pub struct IdentifiedScene {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct CommandLight {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub on: Option<bool>,
@@ -89,21 +90,6 @@ pub struct CommandLight {
     pub scene: Option<String>,
 }
 
-impl Default for CommandLight {
-    fn default() -> CommandLight {
-        CommandLight {
-            on: None,
-            bri: None,
-            hue: None,
-            sat: None,
-            transitiontime: None,
-            ct: None,
-            xy: None,
-            alert: None,
-            scene: None,
-        }
-    }
-}
 
 impl CommandLight {
     pub fn on(self) -> CommandLight {
